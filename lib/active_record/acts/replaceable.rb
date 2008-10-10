@@ -7,13 +7,27 @@ module ActiveRecord
 
       module ClassMethods
         def acts_as_replaceable(options = {})
+          conditions_hash = Hash.new
+
+          case options[:conditions]
+          when Array
+            for condition in options[:conditions]
+              conditions_hash[condition.to_sym] = condition.to_s
+            end
+          when Hash
+              conditions_hash = options[:conditions]
+          end
+          # gsub the inspected conditions to remove double quotes since a string is passed as the value of the hash pair
+          # :key => "value"   ->   :key => value
+          replacement_conditions_string = conditions_hash.inspect.gsub('"','')
+
           class_eval <<-EOV
             include ActiveRecord::Acts::Replaceable::InstanceMethods
 
             attr_accessor :has_been_replaced
 
             def replacement_conditions
-              #{options[:conditions].inspect}
+              #{replacement_conditions_string}
             end
           EOV
         end
@@ -23,7 +37,6 @@ module ActiveRecord
         # Replaces self with the attributes and id of other and assumes other's @new_record status
         def replace(other)
           return false unless other
-
           # Update self's missing attributes with those from the database
           self.attributes.reverse_merge!(other.attributes)
           self.id = other.id
@@ -34,7 +47,6 @@ module ActiveRecord
 
         def find_duplicate(conditions = {})
           records = self.class.find(:all, :conditions => conditions)
-
           if records.size > 1
             raise "Duplicate Records Present in Database"
           end
@@ -44,18 +56,16 @@ module ActiveRecord
         def save!
           # Find the existing record if it exists and set this instantiation's attributes to match (as if we replaced the current object with the existing one)
           replace(find_duplicate(replacement_conditions))
-
-          humanized_class_name = self.class.to_s.humanize
           # Begin Save with exception handling
           begin
             super
             if @has_been_replaced
-              Log.info("Found existing #{humanized_class_name} ##{id} - #{name}")
+              Log.info("Found existing #{self.class.to_s.humanize} ##{id} - #{name if respond_to?('name')}")
             else
-              Log.info("Created #{humanized_class_name} ##{id} - #{name}")
+              Log.info("Created #{self.class.to_s.humanize} ##{id} - #{name if respond_to?('name')}")
             end
           rescue => exception
-            SiteItemLog.error "RRN #{humanized_class_name} ##{id} - Name: #{name} - Couldn't save because #{exception.message}"
+            SiteItemLog.error "RRN #{self.class.to_s.humanize} ##{id} - Name: #{name if respond_to?('name')} - Couldn't save because #{exception.message}"
           end
         end
       end 
