@@ -7,8 +7,9 @@ module ActiveRecord
 
       module ClassMethods
         def acts_as_replaceable(options = {})
+          puts options.to_s
+          validate_replaceable_conditions(options[:conditions])
           conditions_hash = Hash.new
-
           case options[:conditions]
           when Array
             for condition in options[:conditions]
@@ -30,6 +31,28 @@ module ActiveRecord
               #{replacement_conditions_string}
             end
           EOV
+        end
+
+        private
+
+        def validate_replaceable_conditions(conditions)
+          puts "Validating conditions for #{self.class}"
+          case conditions
+          when Array
+            conditions.each do |value|
+              puts "checking #{value}"
+              unless value.is_a?(Symbol) or value.is_a?(String)
+                raise "Conditions passed to acts_as_replaceable must be Strings or Symbols"
+              end
+            end
+          when Hash
+            conditions.each do |key,value|
+              puts "checking #{key} => #{value}"
+              unless key.is_a?(Symbol) and value.is_a?(String)
+                raise "Conditions passed to acts_as_replaceable must be Strings or Symbols"
+              end
+            end
+          end
         end
       end
 
