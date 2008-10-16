@@ -7,7 +7,6 @@ module ActiveRecord
 
       module ClassMethods
         def acts_as_replaceable(options = {})
-          puts options.to_s
           validate_replaceable_conditions(options[:conditions])
           conditions_hash = Hash.new
           case options[:conditions]
@@ -36,7 +35,7 @@ module ActiveRecord
         private
 
         def validate_replaceable_conditions(conditions)
-          puts "Validating conditions for #{self.class}"
+          puts "Validating conditions for #{class_name}"
           case conditions
           when Array
             conditions.each do |value|
@@ -53,6 +52,7 @@ module ActiveRecord
               end
             end
           end
+          puts "Finished conditions for #{class_name}"
         end
       end
 
@@ -71,7 +71,7 @@ module ActiveRecord
         def find_duplicate(conditions = {})
           records = self.class.find(:all, :conditions => conditions)
           if records.size > 1
-            raise "Duplicate Records Present in Database"
+            raise "Duplicate Records Present in Database: #{self.class} - #{conditions}"
           end
           return records.first
         end
@@ -87,8 +87,10 @@ module ActiveRecord
             else
               Log.info("Created #{self.class.to_s.humanize} ##{id} - #{name if respond_to?('name')}")
             end
+            return true
           rescue => exception
             SiteItemLog.error "RRN #{self.class.to_s.humanize} ##{id} - Name: #{name if respond_to?('name')} - Couldn't save because #{exception.message}"
+            return false
           end
         end
       end 
