@@ -35,20 +35,17 @@ module ActiveRecord
         private
 
         def validate_replaceable_conditions(conditions)
-          puts "Validating conditions for #{class_name}"
           case conditions
           when Array
             conditions.each do |value|
-              puts "checking #{value}"
               unless value.is_a?(Symbol) or value.is_a?(String)
-                raise "Conditions passed to acts_as_replaceable must be Strings or Symbols"
+                raise "Error in #{class_name}. Conditions passed to acts_as_replaceable must be Strings or Symbols"
               end
             end
           when Hash
             conditions.each do |key,value|
-              puts "checking #{key} => #{value}"
               unless key.is_a?(Symbol) and value.is_a?(String)
-                raise "Conditions passed to acts_as_replaceable must be Strings or Symbols"
+                raise "Error in #{class_name}. Conditions passed to acts_as_replaceable must be Strings or Symbols"
               end
             end
           end
