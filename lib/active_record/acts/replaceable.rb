@@ -6,6 +6,8 @@ module ActiveRecord
       end
 
       module ClassMethods
+        # If any before_save methods change the attributes, 
+        # acts_as_replaceable will not function correctly.
         def acts_as_replaceable(options = {})
           validate_replaceable_conditions(options[:conditions])
           conditions_hash = Hash.new
@@ -64,12 +66,14 @@ module ActiveRecord
           @has_been_replaced = true
           return true
         end
-
+        
         def find_duplicate(conditions = {})
           records = self.class.find(:all, :conditions => conditions)
+
           if records.size > 1
             raise "Duplicate Records Present in Database: #{self.class} - #{conditions}"
           end
+          
           return records.first
         end
         
@@ -80,13 +84,13 @@ module ActiveRecord
           begin
             super
             if @has_been_replaced
-              Log.info("Found existing #{self.class.to_s.humanize} ##{id} - #{name if respond_to?('name')}")
+              Log.info("Found existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}")
             else
-              Log.info("Created #{self.class.to_s.humanize} ##{id} - #{name if respond_to?('name')}")
+              Log.info("Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}")
             end
             return true
           rescue => exception
-            SiteItemLog.error "RRN #{self.class.to_s.humanize} ##{id} - Name: #{name if respond_to?('name')} - Couldn't save because #{exception.message}"
+            SiteItemLog.error "RRN #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')} - Couldn't save because #{exception.message}"
             return false
           end
         end
