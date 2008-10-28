@@ -58,12 +58,16 @@ module ActiveRecord
       module InstanceMethods
         # Replaces self with the attributes and id of other and assumes other's @new_record status
         def replace(other)
+          
           return false unless other
           # Update self's missing attributes with those from the database
           self.attributes.reverse_merge!(other.attributes)
           self.id = other.id
+          
+          @has_not_changed = self.attributes == other.attributes
           @new_record = other.new_record?
           @has_been_replaced = true
+          
           return true
         end
         
@@ -82,7 +86,7 @@ module ActiveRecord
           replace(find_duplicate(replacement_conditions))
           # Begin Save with exception handling
           begin
-            super
+            super unless @has_not_changed
             if @has_been_replaced
               Log.info("Found existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}")
             else
