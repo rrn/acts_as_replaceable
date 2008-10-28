@@ -87,8 +87,10 @@ module ActiveRecord
           # Begin Save with exception handling
           begin
             super unless @has_not_changed
-            if @has_been_replaced
-              Log.info("Found existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}")
+            if @has_not_changed
+              Log.info("Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}")
+            elsif @has_been_replaced
+              Log.info("Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}")
             else
               Log.info("Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}")
             end
