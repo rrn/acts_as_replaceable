@@ -9,6 +9,8 @@ module ActiveRecord
         # If any before_save methods change the attributes, 
         # acts_as_replaceable will not function correctly.
         def acts_as_replaceable(options = {})
+          @log_output = options[:log]
+
           validate_replaceable_conditions(options[:conditions])
           conditions_hash = Hash.new
           case options[:conditions]
@@ -87,16 +89,20 @@ module ActiveRecord
           # Begin Save with exception handling
           begin
             super unless @has_not_changed
-            if @has_not_changed
-              Log.info("Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}")
-            elsif @has_been_replaced
-              Log.info("Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}")
-            else
-              Log.info("Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}")
+            if @log_output
+              if @has_not_changed
+                Log.info {"Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"}
+              elsif @has_been_replaced
+                Log.info {"Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"}
+              else
+                Log.info {"Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}" }
+              end
             end
             return true
           rescue => exception
-            SiteItemLog.error "RRN #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')} - Couldn't save because #{exception.message}"
+            if @log_output
+              SiteItemLog.error {"RRN #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')} - Couldn't save because #{exception.message}"}
+            end
             return false
           end
         end
