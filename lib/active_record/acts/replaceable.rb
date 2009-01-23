@@ -6,11 +6,9 @@ module ActiveRecord
       end
 
       module ClassMethods
-        # If any before_save methods change the attributes, 
+        # If any before_save methods change the attributes,
         # acts_as_replaceable will not function correctly.
         def acts_as_replaceable(options = {})
-          @log_output = options[:log]
-
           validate_replaceable_conditions(options[:conditions])
           conditions_hash = Hash.new
           case options[:conditions]
@@ -19,7 +17,7 @@ module ActiveRecord
               conditions_hash[condition.to_sym] = condition.to_s
             end
           when Hash
-              conditions_hash = options[:conditions]
+            conditions_hash = options[:conditions]
           end
           # gsub the inspected conditions to remove double quotes since a string is passed as the value of the hash pair
           # :key => "value"   ->   :key => value
@@ -60,53 +58,52 @@ module ActiveRecord
       module InstanceMethods
         # Replaces self with the attributes and id of other and assumes other's @new_record status
         def replace(other)
-          
+
           return false unless other
           # Update self's missing attributes with those from the database
           self.attributes.reverse_merge!(other.attributes)
           self.id = other.id
-          
+
           @has_not_changed = self.attributes == other.attributes
           @new_record = other.new_record?
           @has_been_replaced = true
-          
+
           return true
         end
-        
+
         def find_duplicate(conditions = {})
           records = self.class.find(:all, :conditions => conditions)
-
           if records.size > 1
             raise "Duplicate Records Present in Database: #{self.class} - #{conditions}"
           end
-          
+
           return records.first
         end
-        
+
         def save!
           # Find the existing record if it exists and set this instantiation's attributes to match (as if we replaced the current object with the existing one)
           replace(find_duplicate(replacement_conditions))
           # Begin Save with exception handling
           begin
-            super unless @has_not_changed
-            if @log_output
-              if @has_not_changed
-                Log.info {"Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"}
-              elsif @has_been_replaced
-                Log.info {"Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"}
-              else
-                Log.info {"Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}" }
-              end
+            if @has_not_changed
+              callback(:after_save)
+            else
+              super
+            end
+            if @has_not_changed
+              Log.info {"Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"}
+            elsif @has_been_replaced
+              Log.info {"Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"}
+            else
+              Log.info {"Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}" }
             end
             return true
           rescue => exception
-            if @log_output
-              SiteItemLog.error {"RRN #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')} - Couldn't save because #{exception.message}"}
-            end
+            SiteItemLog.error {"RRN #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')} - Couldn't save because #{exception.message}"}
             return false
           end
         end
-      end 
+      end
     end
   end
 end
