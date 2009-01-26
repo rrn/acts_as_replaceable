@@ -91,15 +91,15 @@ module ActiveRecord
               super
             end
             if @has_not_changed
-              Log.info {"Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"}
+              logger.info {"Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"}
             elsif @has_been_replaced
-              Log.info {"Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"}
+              logger.info {"Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"}
             else
-              Log.info {"Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}" }
+              logger.info {"Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}" }
             end
             return true
           rescue => exception
-            Log.error {"RRN #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')} - Couldn't save because #{exception.message}"}
+            logger.error {"RRN #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')} - Couldn't save because #{exception.message}"}
             return false
           end
         end
