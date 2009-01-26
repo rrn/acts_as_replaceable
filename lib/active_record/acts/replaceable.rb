@@ -99,7 +99,7 @@ module ActiveRecord
             end
             return true
           rescue => exception
-            SiteItemLog.error {"RRN #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')} - Couldn't save because #{exception.message}"}
+            Log.error {"RRN #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')} - Couldn't save because #{exception.message}"}
             return false
           end
         end
