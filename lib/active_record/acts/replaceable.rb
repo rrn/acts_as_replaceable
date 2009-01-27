@@ -51,7 +51,6 @@ module ActiveRecord
               end
             end
           end
-          puts "Finished conditions for #{class_name}"
         end
       end
 
