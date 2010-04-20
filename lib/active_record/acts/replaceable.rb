@@ -59,8 +59,7 @@ module ActiveRecord
         def replace(other)
 
           return false unless other
-          # Update self's missing attributes with those from the database
-          self.attributes.reverse_merge!(other.attributes)
+          
           self.id = other.id
 
           @has_not_changed = self.attributes == other.attributes
