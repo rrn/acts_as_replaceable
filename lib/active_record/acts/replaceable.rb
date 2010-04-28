@@ -55,14 +55,23 @@ module ActiveRecord
       end
 
       module InstanceMethods
-        # Replaces self with the attributes and id of other and assumes other's @new_record status
+        # Replaces self with the id of other and assumes other's @new_record status
         def replace(other)
 
           return false unless other
           
           self.id = other.id
 
-          @has_not_changed = self.attributes == other.attributes
+          # Prepare a list of attributes for comparison, but throw out created_at
+          # and updated_at because they will not be set on self.attributes
+          self_attributes = self.attributes
+          other_attributes = other.attributes
+          self_attributes.delete('created_at')
+          self_attributes.delete('updated_at')
+          other_attributes.delete('created_at')
+          other_attributes.delete('updated_at')
+
+          @has_not_changed = self_attributes == other_attributes
           @new_record = other.new_record?
           @has_been_replaced = true
 
