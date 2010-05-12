@@ -9,73 +9,40 @@ module ActiveRecord
         # If any before_save methods change the attributes,
         # acts_as_replaceable will not function correctly.
         def acts_as_replaceable(options = {})
-          validate_replaceable_conditions(options[:conditions])
-          conditions_hash = Hash.new
-          case options[:conditions]
-          when Array
-            for condition in options[:conditions]
-              conditions_hash[condition.to_sym] = condition.to_s
-            end
-          when Hash
-            conditions_hash = options[:conditions]
-          end
-          # gsub the inspected conditions to remove double quotes since a string is passed as the value of the hash pair
-          # :key => "value"   ->   :key => value
-          replacement_conditions_string = conditions_hash.inspect.gsub('"','')
+          class_variable_set(:@@replacement_options, options.reverse_merge!(:conditions => []))
 
-          class_eval <<-EOV
-            include ActiveRecord::Acts::Replaceable::InstanceMethods
-
-            attr_accessor :has_been_replaced
-
-            def replacement_conditions
-              #{replacement_conditions_string}
-            end
-          EOV
-        end
-
-        private
-
-        def validate_replaceable_conditions(conditions)
-          case conditions
-          when Array
-            conditions.each do |value|
-              unless value.is_a?(Symbol) or value.is_a?(String)
-                raise "Error in #{class_name}. Conditions passed to acts_as_replaceable must be Strings or Symbols"
-              end
-            end
-          when Hash
-            conditions.each do |key,value|
-              unless key.is_a?(Symbol) and value.is_a?(String)
-                raise "Error in #{class_name}. Conditions passed to acts_as_replaceable must be Strings or Symbols"
-              end
-            end
-          end
+          include ActiveRecord::Acts::Replaceable::InstanceMethods
+          extend ActiveRecord::Acts::Replaceable::SingletonMethods
         end
       end
 
+      module SingletonMethods
+        # Returns a list of column names that must form a unique key for this model
+        def attributes_replaceable_on
+          class_variable_get(:@@replacement_options)[:conditions]
+        end
+
+      end
+
       module InstanceMethods
-        # Replaces self with the id of other and assumes other's @new_record status
-        def replace(other)
 
-          return false unless other
-          
-          self.id = other.id
-
-          # Prepare a list of attributes for comparison, but throw out created_at
-          # and updated_at because they will not be set on self.attributes
-          self_attributes = self.attributes
-          other_attributes = other.attributes
-          self_attributes.delete('created_at')
-          self_attributes.delete('updated_at')
-          other_attributes.delete('created_at')
-          other_attributes.delete('updated_at')
-
-          @has_not_changed = self_attributes == other_attributes
-          @new_record = other.new_record?
-          @has_been_replaced = true
-
+        # Override the create or update method so we can run callbacks, but opt not to save if we don't need to
+        def create_or_update_without_callbacks
+          find_and_replace
+          if @has_not_changed
+            logger.info "(acts_as_replaceable) Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
+          elsif @has_been_replaced
+            super
+            logger.info "(acts_as_replaceable) Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
+          else
+            super
+            logger.info "(acts_as_replaceable) Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
+          end
           return true
+        end
+
+        def find_and_replace
+          replace(find_duplicate(conditions_for_find_duplicate))
         end
 
         def find_duplicate(conditions = {})
@@ -87,27 +54,39 @@ module ActiveRecord
           return records.first
         end
 
-        def save!
-          # Find the existing record if it exists and set this instantiation's attributes to match (as if we replaced the current object with the existing one)
-          replace(find_duplicate(replacement_conditions))
-          # Begin Save with exception handling
-          begin
-            if @has_not_changed
-              callback(:after_save)
-            else
-              super
+        def replace(other)
+          return unless other
+
+          @has_been_replaced = true
+          @new_record = false
+          @has_not_changed = !mark_changes(other)
+          self.id = other.id
+        end
+
+        def mark_changes(other)
+          attribs = self.attributes
+
+          # Remove timestamps because we don't care about those
+          attribs.delete('created_at')
+          attribs.delete('updated_at')
+
+          # Copy attributes to other and see how it would change if we updated it
+          # Mark all self's attributes that have changed, so even if they are
+          # still default values, they will be saved to the database
+          other.attributes = attribs
+          other.changed.each{|attribute| send("#{attribute}_will_change!")}
+          
+          return other.changed?
+        end
+
+        # Search the incoming attributes for attributes that are in the replaceable conditions and use those to form a conditions hash
+        # eg. given acts_as_replaceable :conditions => [:first_name, :last_name]
+        #     replacement_conditions({:first_name => 'dave', :last_name => 'bobo', :age => 42}) => :first_name => 'dave', :last_name => 'bobo'
+        def conditions_for_find_duplicate
+          returning Hash.new do |output|
+            self.class.attributes_replaceable_on.each do |attribute_name|
+              output[attribute_name] = self[attribute_name]
             end
-            if @has_not_changed
-              logger.info "(acts_as_replaceable) Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
-            elsif @has_been_replaced
-              logger.info "(acts_as_replaceable) Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
-            else
-              logger.info "(acts_as_replaceable) Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
-            end
-            return true
-          rescue => exception
-            logger.error "RRN #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')} - Couldn't save because #{exception.message}"
-            return false
           end
         end
       end
