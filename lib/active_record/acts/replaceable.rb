@@ -83,7 +83,7 @@ module ActiveRecord
         # eg. given acts_as_replaceable :conditions => [:first_name, :last_name]
         #     replacement_conditions({:first_name => 'dave', :last_name => 'bobo', :age => 42}) => :first_name => 'dave', :last_name => 'bobo'
         def conditions_for_find_duplicate
-          returning Hash.new do |output|
+          {}.tap do |output|
             self.class.attributes_replaceable_on.each do |attribute_name|
               output[attribute_name] = self[attribute_name]
             end
