@@ -9,8 +9,8 @@ module ActsAsReplaceable
     def acts_as_replaceable(options = {})
       class_variable_set(:@@replacement_options, options.reverse_merge!(:conditions => []))
 
-      include ActiveRecord::Acts::Replaceable::InstanceMethods
-      extend ActiveRecord::Acts::Replaceable::SingletonMethods
+      include ActsAsReplaceable::InstanceMethods
+      extend ActsAsReplaceable::SingletonMethods
     end
   end
 
