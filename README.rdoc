@@ -1,0 +1,5 @@
+== ActsAsReplaceable
+
+Overloads the create_or_update_without_callbacks method to allow duplicate records to be replaced 
+without needing to always use find_or_create_by.
+
