@@ -23,17 +23,18 @@ module ActsAsReplaceable
 
   module InstanceMethods
     # Override the create or update method so we can run callbacks, but opt not to save if we don't need to
-    def create_or_update_without_callbacks
+    def create
       find_and_replace
       if @has_not_changed
         logger.info "(acts_as_replaceable) Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
       elsif @has_been_replaced
-        super
+        update
         logger.info "(acts_as_replaceable) Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
       else
         super
         logger.info "(acts_as_replaceable) Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
       end
+      
       return true
     end
 
@@ -42,7 +43,7 @@ module ActsAsReplaceable
     end
 
     def find_duplicate(conditions = {})
-      records = self.class.find(:all, :conditions => conditions)
+      records = self.class.where(conditions)
       if records.size > 1
         raise "Duplicate Records Present in Database: #{self.class} - #{conditions}"
       end
