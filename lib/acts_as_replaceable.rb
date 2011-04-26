@@ -55,7 +55,7 @@ module ActsAsReplaceable
       return unless other
 
       @has_been_replaced = true
-      @persisted = true
+      @new_record = false
       @has_not_changed = !mark_changes(other)
       self.id = other.id
     end
