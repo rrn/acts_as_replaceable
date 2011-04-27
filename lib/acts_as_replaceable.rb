@@ -55,7 +55,8 @@ module ActsAsReplaceable
       return unless other
 
       @has_been_replaced = true
-      @new_record = false
+      define_singleton_method(:new_record?) { false }
+      define_singleton_method(:persisted?) { true }
       @has_not_changed = !mark_changes(other)
       self.id = other.id
     end
