@@ -65,7 +65,6 @@ module ActsAsReplaceable
       define_singleton_method(:new_record?) { false }
       define_singleton_method(:persisted?) { true }
       @has_not_changed = !mark_changes(other)
-      puts "#{self.inspect} has changed" unless @has_not_changed
     end
 
     # Inherit other's attributes for those in acts_as_replaceable_options[:inherit]
