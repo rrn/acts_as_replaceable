@@ -50,9 +50,9 @@ module ActsAsReplaceable
     private
 
     def find_duplicate
-      records = self.class.where(conditions_for_find_duplicate)
-      if records.size > 1
-        raise "#{records.size} Duplicate #{self.class.model_name.pluralize} Present in Database:\n  #{self.inspect} == #{records.inspect}"
+      records = self.class.where(match_conditions).where(insensitive_match_conditions)
+      if records.all.count > 1
+        raise "#{records.count} Duplicate #{self.class.model_name.pluralize} Present in Database:\n  #{self.inspect} == #{records.inspect}"
       end
 
       return records.first
@@ -90,18 +90,26 @@ module ActsAsReplaceable
     end
 
     # Search the incoming attributes for attributes that are in the replaceable conditions and use those to form an Find conditions 
-    def conditions_for_find_duplicate
+    def match_conditions
+      output = {}
+      acts_as_replaceable_options[:match].each do |attribute_name|
+        output[attribute_name] = self[attribute_name]
+      end
+      return output
+    end
+    
+    def insensitive_match_conditions
       sql = []
       binds = []
-      acts_as_replaceable_options[:match].each do |attribute_name|
-        sql << "#{attribute_name} = ?"
-        binds << self[attribute_name]
-      end
       acts_as_replaceable_options[:insensitive_match].each do |attribute_name|
-        sql << "LOWER(#{attribute_name}) = ?"
-        binds << self[attribute_name].downcase
+        if value = self[attribute_name]        
+          sql << "LOWER(#{attribute_name}) = ?"
+          binds << self[attribute_name].downcase
+        else
+          sql << "#{attribute_name} IS NULL"
+        end
       end
-      return [sql.join(' AND ')] + binds
+      return [sql.join(' AND ')] + binds      
     end
   end
 end
