@@ -51,3 +51,7 @@ class Person < ActiveRecord::Base
   acts_as_replaceable :insensitive_match => [:first_name, :last_name]
   validates_presence_of :first_name
 end
+
+def insert_model(klass, attributes)
+  ActiveRecord::Base.connection.execute "INSERT INTO #{klass.quoted_table_name} (#{attributes.keys.join(",")}) VALUES (#{attributes.values.collect { |value| ActiveRecord::Base.connection.quote(value) }.join(",")})", 'Fixture Insert'
+end

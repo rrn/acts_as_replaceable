@@ -6,6 +6,18 @@ describe 'acts_as_dag' do
   end
 
   describe "A saved record" do
+
+    it "should raise an exception if more than one duplicate exists in the database" do
+      insert_model(Material, :name => 'wood')
+      insert_model(Material, :name => 'wood')
+      lambda {Material.create! :name => 'wood'}.should raise_exception
+    end
+
+    it "should raise an exception when matching against multiple fields" do
+      insert_model(Item, :identification_number => '1234', :holding_institution_id => 1)
+      insert_model(Item, :identification_number => '1234', :holding_institution_id => 1)
+      lambda {Item.create! :identification_number => '1234', :holding_institution_id => 1}.should raise_exception
+    end
     
     it "should replace itself with an existing record by matching a single column" do
       Material.create! :name => 'wood'
@@ -44,8 +56,12 @@ describe 'acts_as_dag' do
       Person.create! :first_name => 'John', :last_name => 'Doe'
       Person.create! :first_name => 'joHn', :last_name => 'doE'
       Person.where(:first_name => 'John', :last_name => 'Doe').count.should == 1
-    end
 
+      Person.create! :first_name => 'Alanson', :last_name => 'Skinner'
+      Person.create! :first_name => 'Alanson', :last_name => 'Skinner'
+      Person.where(:first_name => 'Alanson', :last_name => 'Skinner').count.should == 1
+    end
+    
     it "should not replace an existing record with fields that were used to match" do
       Person.create! :first_name => 'joHn', :last_name => 'doE'
       Person.create! :first_name => 'John', :last_name => 'Doe'
