@@ -1,4 +1,7 @@
 module ActsAsReplaceable
+  class RecordNotUnique < Exception
+  end
+
   module ActMethod
     # If any before_save methods change the attributes,
     # acts_as_replaceable will not function correctly.
@@ -51,8 +54,8 @@ module ActsAsReplaceable
 
     def find_duplicate
       records = self.class.where(match_conditions).where(insensitive_match_conditions)
-      if records.load.size > 1
-        raise "#{records.count} Duplicate #{self.class.model_name.pluralize} Present in Database:\n  #{self.inspect} == #{records.inspect}"
+      if records.length > 1
+        raise RecordNotUnique, "#{records.length} duplicate #{self.class.model_name.human.pluralize} present in database"
       end
 
       return records.first
@@ -61,9 +64,8 @@ module ActsAsReplaceable
     def replace(other)
       return unless other
       inherit_attributes(other)
+      @new_record = false
       @has_been_replaced = true
-      define_singleton_method(:new_record?) { false }
-      define_singleton_method(:persisted?) { true }
       @has_not_changed = !mark_changes(other)
     end
 
