@@ -18,7 +18,7 @@ module ActsAsReplaceable
       self.acts_as_replaceable_options[:inherit] = ActsAsReplaceable::HelperMethods.sanitize_attribute_names(self, options[:inherit], options[:insensitive_match], :id, :created_at, :updated_at)
     end
   end
-  
+
   module HelperMethods
     def self.sanitize_attribute_names(klass, *args)
       # Intersect the proposed attributes with the column names so we don't start assigning attributes that don't exist. e.g. if the model doesn't have timestamps
@@ -28,18 +28,18 @@ module ActsAsReplaceable
 
   module InstanceMethods
     # Override the create or update method so we can run callbacks, but opt not to save if we don't need to
-    def create
+    def create_record(*args)
       find_and_replace
       if @has_not_changed
         logger.info "(acts_as_replaceable) Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
       elsif @has_been_replaced
-        update
+        update_record(*args)
         logger.info "(acts_as_replaceable) Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
       else
         super
         logger.info "(acts_as_replaceable) Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
       end
-      
+
       return true
     end
 
@@ -51,7 +51,7 @@ module ActsAsReplaceable
 
     def find_duplicate
       records = self.class.where(match_conditions).where(insensitive_match_conditions)
-      if records.all.count > 1
+      if records.load.size > 1
         raise "#{records.count} Duplicate #{self.class.model_name.pluralize} Present in Database:\n  #{self.inspect} == #{records.inspect}"
       end
 
@@ -83,13 +83,13 @@ module ActsAsReplaceable
       attribs.each do |key, value|
         other[key] = value
       end
-      
+
       other.changed.each {|attribute| send("#{attribute}_will_change!") }
 
       return other.changed?
     end
 
-    # Search the incoming attributes for attributes that are in the replaceable conditions and use those to form an Find conditions 
+    # Search the incoming attributes for attributes that are in the replaceable conditions and use those to form an Find conditions
     def match_conditions
       output = {}
       acts_as_replaceable_options[:match].each do |attribute_name|
@@ -97,19 +97,19 @@ module ActsAsReplaceable
       end
       return output
     end
-    
+
     def insensitive_match_conditions
       sql = []
       binds = []
       acts_as_replaceable_options[:insensitive_match].each do |attribute_name|
-        if value = self[attribute_name]        
+        if value = self[attribute_name]
           sql << "LOWER(#{attribute_name}) = ?"
           binds << self[attribute_name].downcase
         else
           sql << "#{attribute_name} IS NULL"
         end
       end
-      return [sql.join(' AND ')] + binds      
+      return [sql.join(' AND ')] + binds
     end
   end
 end
