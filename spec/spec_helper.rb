@@ -1,4 +1,5 @@
 $LOAD_PATH << File.join(File.dirname(__FILE__), '..', 'lib')
+
 require 'active_record'
 require 'logger'
 require 'acts_as_replaceable'
@@ -55,4 +56,36 @@ end
 def insert_model(klass, attributes)
   ActiveRecord::Base.connection.execute "INSERT INTO #{klass.quoted_table_name} (#{attributes.keys.join(",")}) VALUES (#{attributes.values.collect { |value| ActiveRecord::Base.connection.quote(value) }.join(",")})", 'Fixture Insert'
   return klass.order(:id).last
+end
+
+class Rails
+  def self.cache
+    @cache ||= Cache.new
+  end
+
+  def self.cache=(cache)
+    @cache = cache
+  end
+
+  class Cache
+    def initialize
+      @lock = Mutex.new
+      @store = {}
+    end
+
+    def write(key, value, *args)
+      @lock.synchronize do
+        @store[key] = value
+      end
+    end
+
+    def increment(key, *args)
+      @lock.synchronize do
+        @store[key] = @store[key].to_i + 1
+      end
+    end
+  end
+
+  # init cache so it's there before multiple threads race to initialize it and end up with two different caches
+  self.cache
 end

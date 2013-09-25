@@ -1,3 +1,6 @@
+require 'digest'
+require 'timeout'
+
 module ActsAsReplaceable
   module ActMethod
     # If any before_save methods change the attributes,
@@ -19,7 +22,20 @@ module ActsAsReplaceable
       self.acts_as_replaceable_options[:match] = ActsAsReplaceable::HelperMethods.sanitize_attribute_names(self, options[:match])
       self.acts_as_replaceable_options[:insensitive_match] = ActsAsReplaceable::HelperMethods.sanitize_attribute_names(self, options[:insensitive_match])
       self.acts_as_replaceable_options[:inherit] = ActsAsReplaceable::HelperMethods.sanitize_attribute_names(self, options[:inherit], options[:insensitive_match], :id, :created_at, :updated_at)
+
+      if ActsAsReplaceable.concurrency && !Rails.cache.respond_to?(:increment)
+        raise LockingUnavailable, "To run ActsAsReplaceable in concurrency mode, the Rails cache must provide an :increment method that performs an atomic addition to the given key, e.g. Memcached"
+      end
     end
+  end
+
+  # If using parallel processes to save replaceable records, set this to true to prevent race conditions
+  def self.concurrency=(value)
+    @concurrency = value
+  end
+
+  def self.concurrency
+    !!@concurrency
   end
 
   module HelperMethods
@@ -51,8 +67,8 @@ module ActsAsReplaceable
       return [sql.join(' AND ')] + binds
     end
 
-    # Copy attributes to target and see how it would change if we updated it
-    # Mark all self's attributes that have changed, so even if they are
+    # Copy attributes to existing and see how it would change if we updated it
+    # Mark all record's attributes that have changed, so even if they are
     # still default values, they will be saved to the database
     def self.mark_changes(record, existing)
       copy_attributes(record.attribute_names, record, existing)
@@ -68,17 +84,45 @@ module ActsAsReplaceable
       end
     end
 
-    # Searches the database for an existing copy of record, raises an exception if more than one copy exists in the database
+    # Searches the database for an existing copies of record
     def self.find_existing(record)
       existing = record.class
       existing = existing.where match_conditions(record)
       existing = existing.where insensitive_match_conditions(record)
+    end
 
-      if existing.length > 1
-        raise RecordNotUnique, "#{existing.length} duplicate #{record.class.model_name.human.pluralize} present in database"
+    # Conditionally lock (lets us enable or disable locking)
+    def self.lock_if(condition, *lock_args, &block)
+      if condition
+        lock(*lock_args, &block)
+      else
+        yield
+      end
+    end
+
+    # A lock is used to prevent multiple threads from executing the same query simultaneously
+    # eg. In a multi-threaded environment, 'find_or_create' is prone to failure due to the possibility
+    # that the process is preempted between the 'find' and 'create' logic
+    def self.lock(record, timeout = 20)
+      lock_id  = "ActsAsReplaceable/#{Digest::MD5.digest([match_conditions(record), insensitive_match_conditions(record)].inspect)}"
+      acquired = false
+
+      # Acquire the lock by atomically incrementing and returning the value to see if we're first
+      while !acquired do
+        unless acquired = Rails.cache.increment(lock_id) == 1
+          puts "lock was in use #{lock_id}"
+          sleep(0.250)
+        end
       end
 
-      return existing.first
+      # Reserve the lock for only 10 seconds more than the timeout to ensure a lock is always eventually released
+      Rails.cache.write(lock_id, "1", :raw => true, :expires_in => timeout + 10)
+      Timeout::timeout(timeout) do
+        yield
+      end
+
+    ensure # Give up the lock
+      Rails.cache.write(lock_id, "0", :raw => true) if acquired
     end
   end
 
@@ -100,22 +144,31 @@ module ActsAsReplaceable
   module InstanceMethods
     # Override the create or update method so we can run callbacks, but opt not to save if we don't need to
     def create_record(*args)
-      find_and_replace
-      if @has_not_changed
-        logger.info "(acts_as_replaceable) Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
-      elsif @has_been_replaced
-        update_record(*args)
-        logger.info "(acts_as_replaceable) Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
-      else
-        super
-        logger.info "(acts_as_replaceable) Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
+      ActsAsReplaceable::HelperMethods.lock_if(ActsAsReplaceable.concurrency, self) do
+        find_and_replace
+        if @has_not_changed
+          logger.info "(acts_as_replaceable) Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
+        elsif @has_been_replaced
+          update_record(*args)
+          logger.info "(acts_as_replaceable) Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
+        else
+          super
+          logger.info "(acts_as_replaceable) Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
+        end
       end
 
       return true
     end
 
+    # Replaces self with an existing copy from the database if available, raises an exception if more than one copy exists in the database
     def find_and_replace
-      existing = ActsAsReplaceable::HelperMethods.find_existing(self) and replace_with(existing)
+      existing = ActsAsReplaceable::HelperMethods.find_existing(self)
+
+      if existing.length > 1
+        raise RecordNotUnique, "#{existing.length} duplicate #{record.class.model_name.human.pluralize} present in database"
+      end
+
+      replace_with(existing.first) if existing.first
     end
 
     def replace_with(existing)
@@ -128,6 +181,6 @@ module ActsAsReplaceable
     end
   end
 
-  class RecordNotUnique < Exception
-  end
+  class RecordNotUnique < StandardError; end
+  class LockingUnavailable < StandardError; end
 end

@@ -14,8 +14,33 @@ describe 'acts_as_dag' do
     end
   end
 
-  describe "A saved record" do
+  describe "Helper Methods" do
+    before(:each) { @record = insert_model(Material, :name => 'glass')}
 
+    it "should only allow one thread to hold the lock at a time" do
+      mutex = Mutex.new
+      counter = 0
+      expect do
+        2.times.collect do
+          Thread.new do
+            ActsAsReplaceable::HelperMethods.lock(@record) do
+              expected = mutex.synchronize { counter += 1 }
+              sleep 1 # Long enough that the other thread can try to obtain the lock while we're asleep
+              raise unless expected == counter
+            end
+          end
+        end.each(&:join)
+      end.not_to raise_exception
+    end
+
+    it "should time out execution of a lock block after a certain amount of time" do
+      expect do
+        ActsAsReplaceable::HelperMethods.lock(@record, 1.seconds) { sleep 3 }
+      end.to raise_exception(Timeout::Error)
+    end
+  end
+
+  describe "when saving a record" do
     it "should raise an exception if more than one duplicate exists in the database" do
       insert_model(Material, :name => 'wood')
       insert_model(Material, :name => 'wood')
@@ -100,6 +125,37 @@ describe 'acts_as_dag' do
       a = Material.create! :name => 'wood'
       b = Material.create! :name => 'wood'
       b.persisted?.should be_true
+    end
+
+    # CONCURRENCY
+
+    it "should raise an exception if concurrency is enabled but Rails.cache doesn't support the :increment method" do
+      ActsAsReplaceable.concurrency = true
+      old_cache = Rails.cache
+      Rails.cache = Object.new
+
+      begin
+        expect do
+          class TestClass < ActiveRecord::Base
+            self.table_name = Material.table_name
+            acts_as_replaceable
+          end
+        end.to raise_exception(ActsAsReplaceable::LockingUnavailable)
+      ensure
+        Rails.cache = old_cache
+      end
+    end
+
+    it "should use locking if concurrency is enabled" do
+      ActsAsReplaceable.concurrency = true
+      ActsAsReplaceable::HelperMethods.should_receive(:lock).once
+      Material.create! :name => 'wood'
+    end
+
+    it "should not use locking if concurrency is disabled" do
+      ActsAsReplaceable.concurrency = false
+      ActsAsReplaceable::HelperMethods.should_not_receive(:lock)
+      Material.create! :name => 'wood'
     end
   end
 end
