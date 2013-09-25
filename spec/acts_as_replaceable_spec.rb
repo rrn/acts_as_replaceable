@@ -14,6 +14,32 @@ describe 'acts_as_dag' do
     end
   end
 
+  describe "Helper Methods" do
+    it "should only allow one thread to hold the lock at a time" do
+      glass = insert_model(Material, :name => 'glass')
+
+      counter = 0
+      @counter_lock = Mutex.new
+      2.times.collect do |i|
+        Thread.new do
+          ActsAsReplaceable::HelperMethods.lock(glass) do
+            @counter_lock.synchronize do
+              counter += 1
+              raise if counter > 1
+            end
+
+            sleep 1 # Long enough that the other thread can try to obtain the lock while we're asleep
+
+            @counter_lock.synchronize do
+              raise if counter < 1
+              counter -= 1
+            end
+          end
+        end
+      end.each(&:join)
+    end
+  end
+
   describe "A saved record" do
 
     it "should raise an exception if more than one duplicate exists in the database" do

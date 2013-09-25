@@ -1,3 +1,5 @@
+require 'digest'
+
 module ActsAsReplaceable
   module ActMethod
     # If any before_save methods change the attributes,
@@ -51,8 +53,8 @@ module ActsAsReplaceable
       return [sql.join(' AND ')] + binds
     end
 
-    # Copy attributes to target and see how it would change if we updated it
-    # Mark all self's attributes that have changed, so even if they are
+    # Copy attributes to existing and see how it would change if we updated it
+    # Mark all record's attributes that have changed, so even if they are
     # still default values, they will be saved to the database
     def self.mark_changes(record, existing)
       copy_attributes(record.attribute_names, record, existing)
@@ -68,17 +70,39 @@ module ActsAsReplaceable
       end
     end
 
-    # Searches the database for an existing copy of record, raises an exception if more than one copy exists in the database
+    # Searches the database for an existing copies of record
     def self.find_existing(record)
       existing = record.class
       existing = existing.where match_conditions(record)
       existing = existing.where insensitive_match_conditions(record)
+    end
 
-      if existing.length > 1
-        raise RecordNotUnique, "#{existing.length} duplicate #{record.class.model_name.human.pluralize} present in database"
+    # A lock is used to prevent multiple threads from executing the same query simultaneously
+    # eg. In a multi-threaded environment, 'find_or_create' is prone to failure due to the possibility
+    # that the process is preempted between the 'find' and 'create' logic
+    def self.lock(record)
+      query = [match_conditions(record), insensitive_match_conditions(record)].inspect
+
+      lock_id = "query_cache/#{Digest::MD5.hexdigest(query)}"
+      lock_acquired = false
+
+      # Acquire the lock
+      while !lock_acquired do
+        lock = Rails.cache.read(lock_id)
+        if lock == "0" || lock.blank?
+          lock = Rails.cache.increment(lock_id, 1, :raw => true) # Atomically increment and return the value so we can see if we're the first to request the lock
+          lock_acquired = lock == 1
+        end
+
+        unless lock_acquired
+          puts "lock was in use #{lock_id}"
+          sleep(0.250)
+        end
       end
+      yield
 
-      return existing.first
+    ensure # Give up the lock
+      Rails.cache.write(lock_id, "0", :raw => true) if lock_acquired
     end
   end
 
@@ -100,22 +124,32 @@ module ActsAsReplaceable
   module InstanceMethods
     # Override the create or update method so we can run callbacks, but opt not to save if we don't need to
     def create_record(*args)
-      find_and_replace
-      if @has_not_changed
-        logger.info "(acts_as_replaceable) Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
-      elsif @has_been_replaced
-        update_record(*args)
-        logger.info "(acts_as_replaceable) Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
-      else
-        super
-        logger.info "(acts_as_replaceable) Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
+
+      ActsAsReplaceable::HelperMethods.lock(self) do
+        find_and_replace
+        if @has_not_changed
+          logger.info "(acts_as_replaceable) Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
+        elsif @has_been_replaced
+          update_record(*args)
+          logger.info "(acts_as_replaceable) Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
+        else
+          super
+          logger.info "(acts_as_replaceable) Created #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
+        end
       end
 
       return true
     end
 
+    # Replaces self with an existing copy from the database if available, raises an exception if more than one copy exists in the database
     def find_and_replace
-      existing = ActsAsReplaceable::HelperMethods.find_existing(self) and replace_with(existing)
+      existing = ActsAsReplaceable::HelperMethods.find_existing(self)
+
+      if existing.length > 1
+        raise RecordNotUnique, "#{existing.length} duplicate #{record.class.model_name.human.pluralize} present in database"
+      end
+
+      replace_with(existing.first) if existing.first
     end
 
     def replace_with(existing)
