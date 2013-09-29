@@ -15,6 +15,7 @@ module ActsAsReplaceable
 
       options.symbolize_keys!
       cattr_accessor :acts_as_replaceable_options
+      attr_reader :has_been_replaced
       self.acts_as_replaceable_options = {}
       self.acts_as_replaceable_options[:match] = ActsAsReplaceable::HelperMethods.sanitize_attribute_names(self, options[:match])
       self.acts_as_replaceable_options[:insensitive_match] = ActsAsReplaceable::HelperMethods.sanitize_attribute_names(self, options[:insensitive_match])
