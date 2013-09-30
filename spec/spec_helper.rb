@@ -15,7 +15,7 @@ ActiveRecord::Schema.define(:version => 0) do
     t.string :name
     t.string :fingerprint
   end
-  
+
   create_table :people, :force => true do |t|
     t.string :first_name
     t.string :last_name
@@ -54,4 +54,5 @@ end
 
 def insert_model(klass, attributes)
   ActiveRecord::Base.connection.execute "INSERT INTO #{klass.quoted_table_name} (#{attributes.keys.join(",")}) VALUES (#{attributes.values.collect { |value| ActiveRecord::Base.connection.quote(value) }.join(",")})", 'Fixture Insert'
+  return klass.order(:id).last
 end

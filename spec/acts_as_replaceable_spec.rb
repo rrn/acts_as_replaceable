@@ -5,6 +5,15 @@ describe 'acts_as_dag' do
     [Material, Item, Person].each(&:destroy_all) # Because we're using sqlite3 and it doesn't support transactional specs (afaik)
   end
 
+  describe "Class methods" do
+    it "should be able to return records for which duplicates exist in the database" do
+      insert_model(Material, :name => 'glass')
+      wood1 = insert_model(Material, :name => 'wood')
+      wood2 = insert_model(Material, :name => 'wood')
+      Material.duplicates.order(:id).should == [wood1, wood2]
+    end
+  end
+
   describe "A saved record" do
 
     it "should raise an exception if more than one duplicate exists in the database" do
@@ -18,7 +27,7 @@ describe 'acts_as_dag' do
       insert_model(Item, :identification_number => '1234', :holding_institution_id => 1)
       lambda {Item.create! :identification_number => '1234', :holding_institution_id => 1}.should raise_exception
     end
-    
+
     it "should replace itself with an existing record by matching a single column" do
       Material.create! :name => 'wood'
       Material.create! :name => 'wood'
@@ -45,7 +54,7 @@ describe 'acts_as_dag' do
       c.count.should == 1
       c.first.name.should == 'Dip Stick'
     end
-    
+
     it "should correctly replace an existing record when a match value is nil" do
       a = Item.create! :name => 'Stick', :identification_number => '1234', :holding_institution_id => 1
       b = Item.create! :name => 'Dip Stick', :identification_number => '1234', :holding_institution_id => 1
@@ -61,7 +70,7 @@ describe 'acts_as_dag' do
       Person.create! :first_name => 'Alanson', :last_name => 'Skinner'
       Person.where(:first_name => 'Alanson', :last_name => 'Skinner').count.should == 1
     end
-    
+
     it "should not replace an existing record with fields that were used to match" do
       Person.create! :first_name => 'joHn', :last_name => 'doE'
       Person.create! :first_name => 'John', :last_name => 'Doe'

@@ -1,7 +1,4 @@
 module ActsAsReplaceable
-  class RecordNotUnique < Exception
-  end
-
   module ActMethod
     # If any before_save methods change the attributes,
     # acts_as_replaceable will not function correctly.
@@ -11,11 +8,13 @@ module ActsAsReplaceable
     # :insensitive_match => what fields to do case insensitive matching on.
     # :inherit => what attributes of the existing record overwrite our own attributes
     def acts_as_replaceable(options = {})
+      extend ActsAsReplaceable::ClassMethods
       include ActsAsReplaceable::InstanceMethods
 
-      options.symbolize_keys!
-      cattr_accessor :acts_as_replaceable_options
       attr_reader :has_been_replaced
+      cattr_accessor :acts_as_replaceable_options
+
+      options.symbolize_keys!
       self.acts_as_replaceable_options = {}
       self.acts_as_replaceable_options[:match] = ActsAsReplaceable::HelperMethods.sanitize_attribute_names(self, options[:match])
       self.acts_as_replaceable_options[:insensitive_match] = ActsAsReplaceable::HelperMethods.sanitize_attribute_names(self, options[:insensitive_match])
@@ -27,6 +26,74 @@ module ActsAsReplaceable
     def self.sanitize_attribute_names(klass, *args)
       # Intersect the proposed attributes with the column names so we don't start assigning attributes that don't exist. e.g. if the model doesn't have timestamps
       klass.column_names & args.flatten.compact.collect(&:to_s)
+    end
+
+    # Search the incoming attributes for attributes that are in the replaceable conditions and use those to form an Find conditions
+    def self.match_conditions(record)
+      output = {}
+      record.acts_as_replaceable_options[:match].each do |attribute_name|
+        output[attribute_name] = record[attribute_name]
+      end
+      return output
+    end
+
+    def self.insensitive_match_conditions(record)
+      sql = []
+      binds = []
+      record.acts_as_replaceable_options[:insensitive_match].each do |attribute_name|
+        if value = record[attribute_name]
+          sql << "LOWER(#{attribute_name}) = ?"
+          binds << record[attribute_name].downcase
+        else
+          sql << "#{attribute_name} IS NULL"
+        end
+      end
+      return [sql.join(' AND ')] + binds
+    end
+
+    # Copy attributes to target and see how it would change if we updated it
+    # Mark all self's attributes that have changed, so even if they are
+    # still default values, they will be saved to the database
+    def self.mark_changes(record, existing)
+      copy_attributes(record.attribute_names, record, existing)
+
+      existing.changed.each {|attribute| record.send("#{attribute}_will_change!") }
+
+      return existing.changed?
+    end
+
+    def self.copy_attributes(attributes, source, target)
+      attributes.each do |attribute|
+        target[attribute] = source[attribute]
+      end
+    end
+
+    # Searches the database for an existing copy of record, raises an exception if more than one copy exists in the database
+    def self.find_existing(record)
+      existing = record.class
+      existing = existing.where match_conditions(record)
+      existing = existing.where insensitive_match_conditions(record)
+
+      if existing.length > 1
+        raise RecordNotUnique, "#{existing.length} duplicate #{record.class.model_name.human.pluralize} present in database"
+      end
+
+      return existing.first
+    end
+  end
+
+  module ClassMethods
+    def duplicates
+      columns = acts_as_replaceable_options[:match] + acts_as_replaceable_options[:insensitive_match]
+
+      dup_data = self.select(columns.join(', '))
+      dup_data.group! acts_as_replaceable_options[:match].join(', ')
+      dup_data.group! acts_as_replaceable_options[:insensitive_match].collect{|m| "LOWER(#{m}) AS #{m}"}.join(', ')
+      dup_data.having! "count (*) > 1"
+
+      join_condition = columns.collect{|c| "#{table_name}.#{c} = dup_data.#{c}"}.join(' AND ')
+
+      return self.joins("JOIN (#{dup_data.to_sql}) AS dup_data ON #{join_condition}")
     end
   end
 
@@ -48,71 +115,19 @@ module ActsAsReplaceable
     end
 
     def find_and_replace
-      replace(find_duplicate)
+      existing = ActsAsReplaceable::HelperMethods.find_existing(self) and replace_with(existing)
     end
 
-    private
+    def replace_with(existing)
+      # Inherit target's attributes for those in acts_as_replaceable_options[:inherit]
+      ActsAsReplaceable::HelperMethods.copy_attributes(acts_as_replaceable_options[:inherit], existing, self)
 
-    def find_duplicate
-      records = self.class.where(match_conditions).where(insensitive_match_conditions)
-      if records.length > 1
-        raise RecordNotUnique, "#{records.length} duplicate #{self.class.model_name.human.pluralize} present in database"
-      end
-
-      return records.first
-    end
-
-    def replace(other)
-      return unless other
-      inherit_attributes(other)
-      @new_record = false
+      @new_record        = false
       @has_been_replaced = true
-      @has_not_changed = !mark_changes(other)
+      @has_not_changed   = !ActsAsReplaceable::HelperMethods.mark_changes(self, existing)
     end
+  end
 
-    # Inherit other's attributes for those in acts_as_replaceable_options[:inherit]
-    def inherit_attributes(other)
-      acts_as_replaceable_options[:inherit].each do |attrib|
-        self[attrib] = other[attrib]
-      end
-    end
-
-    def mark_changes(other)
-      attribs = self.attributes
-
-      # Copy attributes to other and see how it would change if we updated it
-      # Mark all self's attributes that have changed, so even if they are
-      # still default values, they will be saved to the database
-      attribs.each do |key, value|
-        other[key] = value
-      end
-
-      other.changed.each {|attribute| send("#{attribute}_will_change!") }
-
-      return other.changed?
-    end
-
-    # Search the incoming attributes for attributes that are in the replaceable conditions and use those to form an Find conditions
-    def match_conditions
-      output = {}
-      acts_as_replaceable_options[:match].each do |attribute_name|
-        output[attribute_name] = self[attribute_name]
-      end
-      return output
-    end
-
-    def insensitive_match_conditions
-      sql = []
-      binds = []
-      acts_as_replaceable_options[:insensitive_match].each do |attribute_name|
-        if value = self[attribute_name]
-          sql << "LOWER(#{attribute_name}) = ?"
-          binds << self[attribute_name].downcase
-        else
-          sql << "#{attribute_name} IS NULL"
-        end
-      end
-      return [sql.join(' AND ')] + binds
-    end
+  class RecordNotUnique < Exception
   end
 end
