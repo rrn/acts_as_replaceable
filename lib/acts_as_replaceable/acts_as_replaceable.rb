@@ -1,4 +1,5 @@
 require 'digest'
+require 'timeout'
 
 module ActsAsReplaceable
   module ActMethod
@@ -80,25 +81,26 @@ module ActsAsReplaceable
     # A lock is used to prevent multiple threads from executing the same query simultaneously
     # eg. In a multi-threaded environment, 'find_or_create' is prone to failure due to the possibility
     # that the process is preempted between the 'find' and 'create' logic
-    def self.lock(record)
-      query = [match_conditions(record), insensitive_match_conditions(record)].inspect
+    def self.lock(record, timeout = 20)
+      lock_id  = "ActsAsReplaceable/#{Digest::MD5.digest([match_conditions(record), insensitive_match_conditions(record)].inspect)}"
+      acquired = false
 
-      lock_id = "query_cache/#{Digest::MD5.hexdigest(query)}"
-      lock_acquired = false
-
-      # Acquire the lock
-      while !lock_acquired do
-        lock_acquired = Rails.cache.increment(lock_id) == 1 # Atomically increment and return the value so we can see if we're the first to request the lock
-
-        unless lock_acquired
+      # Acquire the lock by atomically incrementing and returning the value to see if we're first
+      while !acquired do
+        unless acquired = Rails.cache.increment(lock_id) == 1
           puts "lock was in use #{lock_id}"
           sleep(0.250)
         end
       end
-      yield
+
+      # Reserve the lock for only 10 seconds more than the timeout to ensure a lock is always eventually released
+      Rails.cache.write(lock_id, "1", :raw => true, :expires_in => timeout + 10)
+      Timeout::timeout(timeout) do
+        yield
+      end
 
     ensure # Give up the lock
-      Rails.cache.write(lock_id, "0", :raw => true) if lock_acquired
+      Rails.cache.write(lock_id, "0", :raw => true) if acquired
     end
   end
 
@@ -120,7 +122,6 @@ module ActsAsReplaceable
   module InstanceMethods
     # Override the create or update method so we can run callbacks, but opt not to save if we don't need to
     def create_record(*args)
-
       ActsAsReplaceable::HelperMethods.lock(self) do
         find_and_replace
         if @has_not_changed
@@ -158,6 +159,6 @@ module ActsAsReplaceable
     end
   end
 
-  class RecordNotUnique < Exception
+  class RecordNotUnique < StandardError
   end
 end

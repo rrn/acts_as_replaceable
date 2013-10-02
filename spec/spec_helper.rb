@@ -69,12 +69,10 @@ class Rails
       @store = {}
     end
 
-    def read(key)
-      @store[key]
-    end
-
     def write(key, value, *args)
-      @store[key] = value
+      @lock.synchronize do
+        @store[key] = value
+      end
     end
 
     def increment(key, *args)
@@ -83,4 +81,7 @@ class Rails
       end
     end
   end
+
+  # init cache so it's there before multiple threads race to initialize it and end up with two different caches
+  self.cache
 end
