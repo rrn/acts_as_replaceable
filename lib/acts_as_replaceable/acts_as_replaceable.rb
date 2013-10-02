@@ -88,11 +88,7 @@ module ActsAsReplaceable
 
       # Acquire the lock
       while !lock_acquired do
-        lock = Rails.cache.read(lock_id)
-        if lock == "0" || lock.blank?
-          lock = Rails.cache.increment(lock_id, 1, :raw => true) # Atomically increment and return the value so we can see if we're the first to request the lock
-          lock_acquired = lock == 1
-        end
+        lock_acquired = Rails.cache.increment(lock_id) == 1 # Atomically increment and return the value so we can see if we're the first to request the lock
 
         unless lock_acquired
           puts "lock was in use #{lock_id}"
