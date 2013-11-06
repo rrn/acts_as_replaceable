@@ -15,27 +15,27 @@ describe 'acts_as_dag' do
   end
 
   describe "Helper Methods" do
-    it "should only allow one thread to hold the lock at a time" do
-      record       = insert_model(Material, :name => 'glass')
-      counter      = 0
-      counter_lock = Mutex.new
+    before(:each) { @record = insert_model(Material, :name => 'glass')}
 
-      2.times.collect do
-        Thread.new do
-          ActsAsReplaceable::HelperMethods.lock(record) do
-            expected = counter_lock.synchronize { counter += 1 }
-            sleep 1 # Long enough that the other thread can try to obtain the lock while we're asleep
-            raise "expected #{expected}, counter #{counter}" unless expected == counter
+    it "should only allow one thread to hold the lock at a time" do
+      mutex = Mutex.new
+      counter = 0
+      expect do
+        2.times.collect do
+          Thread.new do
+            ActsAsReplaceable::HelperMethods.lock(@record) do
+              expected = mutex.synchronize { counter += 1 }
+              sleep 1 # Long enough that the other thread can try to obtain the lock while we're asleep
+              raise unless expected == counter
+            end
           end
-        end
-      end.each(&:join)
+        end.each(&:join)
+      end.not_to raise_exception
     end
 
     it "should time out execution of a lock block after a certain amount of time" do
-      record = insert_model(Material, :name => 'glass')
-
       expect do
-        ActsAsReplaceable::HelperMethods.lock(record, 1.seconds) { sleep 3 }
+        ActsAsReplaceable::HelperMethods.lock(@record, 1.seconds) { sleep 3 }
       end.to raise_exception(Timeout::Error)
     end
   end
