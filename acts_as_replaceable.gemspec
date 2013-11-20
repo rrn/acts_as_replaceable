@@ -8,5 +8,5 @@ Gem::Specification.new do |s|
   s.authors = ['Nicholas Jakobsen', 'Ryan Wallace']
   s.files = Dir.glob("{lib,spec}/**/*") + %w(README.rdoc)
 
-  s.add_dependency('rails', '~> 4.0')
+  s.add_dependency('rails', ">= 3.2", "< 4.1.0")
 end
