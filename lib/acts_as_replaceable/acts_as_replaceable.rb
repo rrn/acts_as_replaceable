@@ -131,11 +131,11 @@ module ActsAsReplaceable
       columns = acts_as_replaceable_options[:match] + acts_as_replaceable_options[:insensitive_match]
 
       dup_data = self.select(columns.join(', '))
-      dup_data.group! acts_as_replaceable_options[:match].join(', ')
-      dup_data.group! acts_as_replaceable_options[:insensitive_match].collect{|m| "LOWER(#{m}) AS #{m}"}.join(', ')
-      dup_data.having! "count (*) > 1"
+      dup_data = dup_data.group acts_as_replaceable_options[:match].join(', ')
+      dup_data = dup_data.group acts_as_replaceable_options[:insensitive_match].collect{|m| "LOWER(#{m}) AS #{m}"}.join(', ')
+      dup_data = dup_data.having "count (*) > 1"
 
-      join_condition = columns.collect{|c| "#{table_name}.#{c} = dup_data.#{c}"}.join(' AND ')
+      join_condition = columns.collect {|c| "#{table_name}.#{c} = dup_data.#{c}" }.join(' AND ')
 
       return self.joins("JOIN (#{dup_data.to_sql}) AS dup_data ON #{join_condition}")
     end
