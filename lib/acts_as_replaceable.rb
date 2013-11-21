@@ -1,10 +1,10 @@
 require 'acts_as_replaceable/acts_as_replaceable'
 
-ActiveRecord::Base.extend ActsAsReplaceable::ActMethod
-
 # Rails 3 compatibility
 if ActiveRecord::VERSION::MAJOR < 4
 	ActiveRecord::Base.class_eval do
+		alias_method :create_record, :create
+
 	  def create(*args)
 	    create_record(*args)
 	  end
@@ -14,3 +14,5 @@ if ActiveRecord::VERSION::MAJOR < 4
 	  end
 	end
 end
+
+ActiveRecord::Base.extend ActsAsReplaceable::ActMethod
