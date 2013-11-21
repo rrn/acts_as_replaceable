@@ -165,7 +165,7 @@ module ActsAsReplaceable
       existing = ActsAsReplaceable::HelperMethods.find_existing(self)
 
       if existing.length > 1
-        raise RecordNotUnique, "#{existing.length} duplicate #{record.class.model_name.human.pluralize} present in database"
+        raise RecordNotUnique, "#{existing.length} duplicate #{self.class.model_name.human.pluralize} present in database"
       end
 
       replace_with(existing.first) if existing.first
