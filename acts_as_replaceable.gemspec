@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'acts_as_replaceable'
-  s.version = '1.2.2'
+  s.version = '1.3.0'
   s.date = %q{2014-07-09}
   s.email = 'technical@rrnpilot.org'
   s.homepage = 'http://github.com/rrn/acts_as_replaceable'
@@ -8,9 +8,9 @@ Gem::Specification.new do |s|
   s.authors = ['Nicholas Jakobsen', 'Ryan Wallace']
   s.files = Dir.glob("{lib,spec}/**/*") + %w(README.rdoc)
 
-  s.add_dependency('rails', ">= 3.2", "<= 4.0.5")
+  s.add_dependency('rails', ">= 4.0.6", "< 4.2.0")
 
-  s.add_development_dependency('bundler')
-  s.add_development_dependency('sqlite3')
-  s.add_development_dependency('rspec-rails')
+  s.add_development_dependency('bundler', '~> 1.5')
+  s.add_development_dependency('sqlite3', '~> 1.3')
+  s.add_development_dependency('rspec-rails', '~> 2.0')
 end

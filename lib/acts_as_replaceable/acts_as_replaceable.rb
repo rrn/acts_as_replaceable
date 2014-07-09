@@ -143,13 +143,13 @@ module ActsAsReplaceable
 
   module InstanceMethods
     # Override the create or update method so we can run callbacks, but opt not to save if we don't need to
-    def create_record(*args)
+    def _create_record(*args)
       ActsAsReplaceable::HelperMethods.lock_if(ActsAsReplaceable.concurrency, self) do
         find_and_replace
         if @has_not_changed
           logger.info "(acts_as_replaceable) Found unchanged #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
         elsif @has_been_replaced
-          update_record(*args)
+          _update_record(*args)
           logger.info "(acts_as_replaceable) Updated existing #{self.class.to_s} ##{id} #{"- Name: #{name}" if respond_to?('name')}"
         else
           super
