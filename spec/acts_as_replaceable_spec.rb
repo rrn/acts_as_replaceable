@@ -118,13 +118,13 @@ describe 'acts_as_dag' do
     it "should not be a new_record? if it has replaced an existing record" do
       a = Material.create! :name => 'wood'
       b = Material.create! :name => 'wood'
-      b.new_record?.should be_false
+      b.new_record?.should be_falsey
     end
 
     it "should be persisted? if it has replaced an existing record" do
       a = Material.create! :name => 'wood'
       b = Material.create! :name => 'wood'
-      b.persisted?.should be_true
+      b.persisted?.should be_truthy
     end
 
     # CONCURRENCY
