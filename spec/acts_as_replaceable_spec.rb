@@ -14,6 +14,16 @@ describe 'acts_as_dag' do
     end
   end
 
+  describe "Model" do
+    it 'evaluates without error when no database table exists' do
+      eval("class NoTable < ActiveRecord::Base; end")
+      klass = NoTable
+
+      klass.table_name = "some_table_that_does_not_exist"
+      expect(klass.acts_as_replaceable).to be_nil
+    end
+  end
+
   describe "Helper Methods" do
     before(:each) { @record = insert_model(Material, :name => 'glass')}
 

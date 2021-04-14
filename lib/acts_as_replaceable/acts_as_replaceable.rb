@@ -40,6 +40,10 @@ module ActsAsReplaceable
 
   module HelperMethods
     def self.sanitize_attribute_names(klass, *args)
+      unless klass.connected? && klass.table_exists?
+        ActiveRecord::Base.logger.warn "(acts_as_replaceable) unable to connect to table `#{klass.table_name}` so excluding all attribute names"
+        return []
+      end
       # Intersect the proposed attributes with the column names so we don't start assigning attributes that don't exist. e.g. if the model doesn't have timestamps
       klass.column_names & args.flatten.compact.collect(&:to_s)
     end
