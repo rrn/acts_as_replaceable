@@ -109,6 +109,12 @@ describe 'acts_as_dag' do
       Person.where(:first_name => 'John').count.should == 1
     end
 
+    it "should correctly detect difference between blank and nil values" do
+      a = Person.create! :first_name => 'John', :last_name => ''
+      a = Person.create! :first_name => 'John', :last_name => nil
+      Person.where(:first_name => 'John').count.should == 2
+    end
+
     it "should inherit the id of the existing record" do
       a = Material.create! :name => 'wood'
       b = Material.create! :name => 'wood'
