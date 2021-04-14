@@ -1,4 +1,4 @@
-require 'digest'
+require 'openssl'
 require 'timeout'
 
 module ActsAsReplaceable
@@ -104,7 +104,7 @@ module ActsAsReplaceable
     # eg. In a multi-threaded environment, 'find_or_create' is prone to failure due to the possibility
     # that the process is preempted between the 'find' and 'create' logic
     def self.lock(record, timeout = 20)
-      lock_id  = "ActsAsReplaceable/#{Digest::MD5.digest([match_conditions(record), insensitive_match_conditions(record)].inspect)}"
+      lock_id  = "ActsAsReplaceable/#{OpenSSL::Digest::MD5.digest([match_conditions(record), insensitive_match_conditions(record)].inspect)}"
       acquired = false
 
       # Acquire the lock by atomically incrementing and returning the value to see if we're first
