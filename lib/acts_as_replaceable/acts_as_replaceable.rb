@@ -175,6 +175,14 @@ module ActsAsReplaceable
       # Inherit target's attributes for those in acts_as_replaceable_options[:inherit]
       ActsAsReplaceable::HelperMethods.copy_attributes(acts_as_replaceable_options[:inherit], existing, self)
 
+      # Rails 5 introduced AR::Dirty and started using `mutations_from_database` to
+      # lookup `id_in_database` which is required for the `_update_record` call
+      #
+      # This chunk of code is copied from https://api.rubyonrails.org/classes/ActiveRecord/Persistence.html#method-i-becomes
+      if existing.respond_to?(:mutations_from_database, true)
+        instance_variable_set("@mutations_from_database", existing.send(:mutations_from_database) || nil)
+      end
+
       @new_record        = false
       @has_been_replaced = true
       @has_not_changed   = !ActsAsReplaceable::HelperMethods.mark_changes(self, existing)
