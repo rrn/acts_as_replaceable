@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-describe 'acts_as_dag' do
+describe 'acts_as_replaceable' do
   before(:each) do
     [Material, Item, Person].each(&:destroy_all) # Because we're using sqlite3 and it doesn't support transactional specs (afaik)
   end
