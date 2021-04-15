@@ -14,6 +14,16 @@ describe 'acts_as_replaceable' do
     end
   end
 
+  describe "Model" do
+    it 'evaluates without error when no database table exists' do
+      eval("class NoTable < ActiveRecord::Base; end")
+      klass = NoTable
+
+      klass.table_name = "some_table_that_does_not_exist"
+      expect(klass.acts_as_replaceable).to be_nil
+    end
+  end
+
   describe "Helper Methods" do
     before(:each) { @record = insert_model(Material, :name => 'glass')}
 
@@ -107,6 +117,12 @@ describe 'acts_as_replaceable' do
       a = Person.create! :first_name => 'John'
       a = Person.create! :first_name => 'John'
       Person.where(:first_name => 'John').count.should == 1
+    end
+
+    it "should correctly detect difference between blank and nil values" do
+      a = Person.create! :first_name => 'John', :last_name => ''
+      a = Person.create! :first_name => 'John', :last_name => nil
+      Person.where(:first_name => 'John').count.should == 2
     end
 
     it "should inherit the id of the existing record" do

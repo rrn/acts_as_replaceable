@@ -1,4 +1,4 @@
-require 'digest'
+require 'openssl'
 require 'timeout'
 
 module ActsAsReplaceable
@@ -40,6 +40,10 @@ module ActsAsReplaceable
 
   module HelperMethods
     def self.sanitize_attribute_names(klass, *args)
+      unless klass.connected? && klass.table_exists?
+        ActiveRecord::Base.logger.warn "(acts_as_replaceable) unable to connect to table `#{klass.table_name}` so excluding all attribute names"
+        return []
+      end
       # Intersect the proposed attributes with the column names so we don't start assigning attributes that don't exist. e.g. if the model doesn't have timestamps
       klass.column_names & args.flatten.compact.collect(&:to_s)
     end
@@ -104,7 +108,7 @@ module ActsAsReplaceable
     # eg. In a multi-threaded environment, 'find_or_create' is prone to failure due to the possibility
     # that the process is preempted between the 'find' and 'create' logic
     def self.lock(record, timeout = 20)
-      lock_id  = "ActsAsReplaceable/#{Digest::MD5.digest([match_conditions(record), insensitive_match_conditions(record)].inspect)}"
+      lock_id  = "ActsAsReplaceable/#{OpenSSL::Digest::MD5.digest([match_conditions(record), insensitive_match_conditions(record)].inspect)}"
       acquired = false
 
       # Acquire the lock by atomically incrementing and returning the value to see if we're first
@@ -174,6 +178,14 @@ module ActsAsReplaceable
     def replace_with(existing)
       # Inherit target's attributes for those in acts_as_replaceable_options[:inherit]
       ActsAsReplaceable::HelperMethods.copy_attributes(acts_as_replaceable_options[:inherit], existing, self)
+
+      # Rails 5 introduced AR::Dirty and started using `mutations_from_database` to
+      # lookup `id_in_database` which is required for the `_update_record` call
+      #
+      # This chunk of code is copied from https://api.rubyonrails.org/classes/ActiveRecord/Persistence.html#method-i-becomes
+      if existing.respond_to?(:mutations_from_database, true)
+        instance_variable_set("@mutations_from_database", existing.send(:mutations_from_database) || nil)
+      end
 
       @new_record        = false
       @has_been_replaced = true
