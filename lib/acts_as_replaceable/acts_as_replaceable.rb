@@ -90,7 +90,7 @@ module ActsAsReplaceable
 
     # Searches the database for an existing copies of record
     def self.find_existing(record)
-      existing = record.class
+      existing = record.class.default_scoped
       existing = existing.where match_conditions(record)
       existing = existing.where insensitive_match_conditions(record)
     end
