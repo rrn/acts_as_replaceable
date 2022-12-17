@@ -68,6 +68,8 @@ module ActsAsReplaceable
           sql << "#{attribute_name} IS NULL"
         end
       end
+
+      return nil if sql.empty?
       return [sql.join(' AND ')] + binds
     end
 
