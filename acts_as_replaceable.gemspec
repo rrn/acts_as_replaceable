@@ -8,7 +8,7 @@ Gem::Specification.new do |s|
   s.authors = ['Nicholas Jakobsen', 'Ryan Wallace']
   s.files = Dir.glob("{lib,spec}/**/*") + %w(README.rdoc)
 
-  s.add_dependency('rails', [">= 4.1.8", "< 8"])
+  s.add_dependency('rails', [">= 4.1.8", "< 9"])
 
   s.add_development_dependency('sqlite3')
   s.add_development_dependency('rspec-rails')
